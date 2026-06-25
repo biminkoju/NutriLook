@@ -133,14 +133,8 @@ export function useOpenFoodFacts(keys = {}) {
     }
 
     try {
-      const res = await fetch(
-          `https://api.nal.usda.gov/fdc/v1/foods/search` +
-          `?query=${encodeURIComponent(food)}` +
-          `&api_key=${usdaApiKey.trim()}` +
-          `&pageSize=5` +
-          `&dataType=Foundation,SR%20Legacy`  // whole foods only, no branded
-                                              // duplicates
-      );
+      const res =
+          await fetch(`/api/nutrition?query=${encodeURIComponent(food)}`);
 
       if (!res.ok) {
         const err = await res.json();

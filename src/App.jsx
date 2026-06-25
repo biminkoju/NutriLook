@@ -11,9 +11,7 @@ export default function App() {
   // const [showKey, setShowKey] = useState(false);
 
 
-  const { result, loading, error, source, lookup } = useOpenFoodFacts({
-    usda: import.meta.env.VITE_USDA_API_KEY,
-  });
+  const { result, loading, error, source, lookup } = useOpenFoodFacts();
 
   function handleSearch() { lookup(query); }
   function handleKeyDown(e) { if (e.key === "Enter") handleSearch(); }
