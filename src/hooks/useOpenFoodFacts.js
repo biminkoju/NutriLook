@@ -1,6 +1,7 @@
 import {useState} from 'react';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers
+// ───────────────────────────────────────────────────────────────────
 
 function mapOFFProduct(product) {
   const n = product.nutriments || {};
@@ -28,16 +29,12 @@ function mapOFFProduct(product) {
   };
 }
 
-function getNutrientValue(nutrientsArray, nutrientNumber) {
-  return nutrientsArray.find((n) => n.nutrientNumber === nutrientNumber)
-             ?.value ??
-      0;
+function getNutrientValue(arr, num) {
+  return arr.find((n) => n.nutrientNumber === num)?.value ?? 0;
 }
 
 function mapUSDAItem(item) {
   const n = item.foodNutrients || [];
-  // USDA nutrient numbers: 208=calories, 203=protein, 204=fat,
-  // 205=carbs, 291=fiber, 269=sugar, 307=sodium, 606=saturated fat
   return {
     name: item.description || '',
     brand: item.brandOwner || '',
@@ -48,7 +45,6 @@ function mapUSDAItem(item) {
     carbs: +getNutrientValue(n, '205').toFixed(1),
     fiber: +getNutrientValue(n, '291').toFixed(1),
     sugar: +getNutrientValue(n, '269').toFixed(1),
-    // USDA gives sodium (mg), convert to salt (g): sodium * 2.5 / 1000
     salt: +((getNutrientValue(n, '307') * 2.5) / 1000).toFixed(2),
     saturatedFat: +getNutrientValue(n, '606').toFixed(1),
     nutriScore: null,
@@ -60,14 +56,19 @@ function mapUSDAItem(item) {
   };
 }
 
-// ── Hook ─────────────────────────────────────────────────────────────────────
+// ── Hook
+// ──────────────────────────────────────────────────────────────────────
 
-export function useOpenFoodFacts(keys = {}) {
-  const usdaApiKey = typeof keys === 'string' ? keys : (keys.usda ?? '');
-  const [result, setResult] = useState(null);
+export function useOpenFoodFacts() {
+  const [results, setResults] = useState([]);  // all results
+  const [selectedIndex, setSelectedIndex] =
+      useState(0);  // which one is in focus
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [source, setSource] = useState(null);  // "openfoodfacts" | "usda"
+  const [source, setSource] = useState(null);
+
+  // The focused result — what NutritionCard shows
+  const result = results[selectedIndex] ?? null;
 
   async function lookup(query) {
     const food = query.trim();
@@ -75,10 +76,14 @@ export function useOpenFoodFacts(keys = {}) {
 
     setLoading(true);
     setError('');
-    setResult(null);
+    setResults([]);
+    setSelectedIndex(0);
     setSource(null);
 
-    // ── Step 1: Try Open Food Facts ─────────────────────────────────────────
+    const allResults = [];
+
+    // ── Step 1: Open Food Facts
+    // ───────────────────────────────────────────────
     try {
       const params = new URLSearchParams({
         search_terms: food,
@@ -106,66 +111,62 @@ export function useOpenFoodFacts(keys = {}) {
 
       if (res.ok) {
         const data = await res.json();
-        const product = data.products?.find(
-                            (p) => p.nutriments?.['energy-kcal_100g'] > 0) ||
-            data.products?.[0];
-
-        // Use OFF result only if it has a name AND calories
-        if (product?.product_name &&
-            product?.nutriments?.['energy-kcal_100g'] > 0) {
-          const mapped = mapOFFProduct(product);
-          setResult(mapped);
-          setSource('openfoodfacts');
-          setLoading(false);
-          return;
-        }
+        const valid = (data.products || [])
+                          .filter(
+                              (p) => p.product_name &&
+                                  (p.nutriments?.['energy-kcal_100g'] > 0));
+        allResults.push(...valid.map(mapOFFProduct));
       }
-    } catch {
-      // OFF failed silently — fall through to USDA
+    } catch { /* fall through */
     }
 
-    // ── Step 2: Fall back to USDA FoodData Central ──────────────────────────
-    if (!usdaApiKey.trim()) {
-      setError(`No packaged product found for "${
-          food}". Add your USDA API key to search whole foods like chicken breast, rice, or tofu.`);
-      setLoading(false);
-      return;
-    }
-
+    // ── Step 2: USDA via serverless proxy
+    // ─────────────────────────────────────
     try {
       const res =
           await fetch(`/api/nutrition?query=${encodeURIComponent(food)}`);
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err?.message || `USDA API error ${res.status}`);
+      if (res.ok) {
+        const data = await res.json();
+        const valid =
+            (data.foods || [])
+                .filter(
+                    (f) => f.description &&
+                        getNutrientValue(f.foodNutrients || [], '208') > 0);
+        allResults.push(...valid.map(mapUSDAItem));
       }
-
-      const data = await res.json();
-
-      if (!data.foods?.length) {
-        throw new Error(
-            `No results found for "${food}". Try a different name.`);
-      }
-
-      // Prefer results whose description closely matches the query
-      const scored = data.foods.map(
-          (f) => ({
-            food: f,
-            score: f.description.toLowerCase().includes(food.toLowerCase()) ?
-                1 :
-                0,
-          }));
-      const best = scored.sort((a, b) => b.score - a.score)[0].food;
-
-      setResult(mapUSDAItem(best));
-      setSource('usda');
-    } catch (e) {
-      setError(e.message || 'Something went wrong. Try again.');
-    } finally {
-      setLoading(false);
+    } catch { /* fall through */
     }
+
+    if (allResults.length === 0) {
+      setError(
+          `No results found for "${food}". Try a different name or spelling.`);
+      setLoading(false);
+      return;
+    }
+
+    // Best result: prefer OFF with calories, then anything with calories
+    const bestIndex = allResults.findIndex(
+        (r) => r.source === 'openfoodfacts' && r.calories > 0);
+    setSelectedIndex(bestIndex >= 0 ? bestIndex : 0);
+    setResults(allResults);
+    setSource(allResults[bestIndex >= 0 ? bestIndex : 0].source);
+    setLoading(false);
   }
 
-  return {result, loading, error, source, lookup};
+  function selectResult(index) {
+    setSelectedIndex(index);
+    setSource(results[index]?.source ?? null);
+  }
+
+  return {
+    result,
+    results,
+    selectedIndex,
+    selectResult,
+    loading,
+    error,
+    source,
+    lookup
+  };
 }

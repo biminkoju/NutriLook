@@ -9,8 +9,7 @@ export default async function handler(req, res) {
   const url = `https://api.nal.usda.gov/fdc/v1/foods/search` +
       `?query=${encodeURIComponent(query)}` +
       `&api_key=${process.env.USDA_API_KEY}` +  // no VITE_ prefix — server only
-      `&pageSize=5` +
-      `&dataType=Foundation,SR%20Legacy`;
+      `&pageSize=10`;
 
   const response = await fetch(url);
   const data = await response.json();
