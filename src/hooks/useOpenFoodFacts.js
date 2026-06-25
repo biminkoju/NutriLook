@@ -62,7 +62,8 @@ function mapUSDAItem(item) {
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useOpenFoodFacts(usdaApiKey = '') {
+export function useOpenFoodFacts(keys = {}) {
+  const usdaApiKey = typeof keys === 'string' ? keys : (keys.usda ?? '');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

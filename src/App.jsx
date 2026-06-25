@@ -5,11 +5,15 @@ import { useOpenFoodFacts } from "./hooks/useOpenFoodFacts";
 
 export default function App() {
   const [query, setQuery] = useState("");
-  const [usdaKey, setUsdaKey] = useState("");
-  const [keyStored, setKeyStored] = useState(false);
-  const [showKey, setShowKey] = useState(false);
 
-  const { result, loading, error, source, lookup } = useOpenFoodFacts(usdaKey);
+  // const [usdaKey, setUsdaKey] = useState("");
+  // const [keyStored, setKeyStored] = useState(false);
+  // const [showKey, setShowKey] = useState(false);
+
+
+  const { result, loading, error, source, lookup } = useOpenFoodFacts({
+    usda: import.meta.env.VITE_USDA_API_KEY,
+  });
 
   function handleSearch() { lookup(query); }
   function handleKeyDown(e) { if (e.key === "Enter") handleSearch(); }
@@ -31,7 +35,7 @@ export default function App() {
         </div>
 
         {/* USDA API key */}
-        <div
+        {/* <div
           style={{
             background: "var(--color-background-primary)",
             border: "0.5px solid var(--color-border-tertiary)",
@@ -72,7 +76,7 @@ export default function App() {
           <p style={{ fontSize: 12, color: "var(--color-text-tertiary)", margin: "6px 0 0" }}>
             Without this key, only packaged/branded products are searchable.
           </p>
-        </div>
+        </div> */}
 
         {/* Search bar */}
         <div style={{ display: "flex", gap: 8, marginBottom: "1.5rem" }}>
